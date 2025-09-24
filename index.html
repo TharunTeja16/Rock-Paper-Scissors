@@ -1,11 +1,240 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rock Paper Scissors Arcade</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-    
+
+<button id="modeToggle">🌙 Dark</button>
+
+<h1>✊✋✌️ Rock Paper Scissors</h1>
+<p>Best of 5 — First to 3 points wins 🏆</p>
+
+<div class="choices" id="choices">
+  <div class="choice" data-choice="rock">✊</div>
+  <div class="choice" data-choice="paper">✋</div>
+  <div class="choice" data-choice="scissors">✌️</div>
+</div>
+
+<div id="result">Make your move!</div>
+<div id="score">You: 0 | Computer: 0</div>
+<button class="btn" id="playAgainBtn" onclick="resetGame()">🔄 Play Again</button>
+
+<div id="history">
+<h2>📜 Match History</h2>
+<ul id="historyList"></ul>
+</div>
+
+<div id="matchScoreboard">🏅 Matches — You: 0 | Computer: 0</div>
+
+<!-- Hot streak text -->
+<div id="streakText">🔥 HOT STREAK! 🔥</div>
+
+<!-- Modal -->
+<div class="modal" id="winnerModal">
+  <div class="modal-content">
+    <h2 id="winnerTitle"></h2>
+    <p id="winnerMessage"></p>
+    <button class="close-btn" onclick="closeModal()">OK</button>
+  </div>
+</div>
+
+<script>
+// Dark/Light mode
+const modeToggle=document.getElementById("modeToggle");
+if(localStorage.getItem("rpsMode")==="light") document.body.classList.add("light");
+updateToggleText();
+modeToggle.addEventListener("click",()=>{
+  document.body.classList.toggle("light");
+  localStorage.setItem("rpsMode", document.body.classList.contains("light")?"light":"dark");
+  updateToggleText();
+});
+function updateToggleText(){modeToggle.textContent=document.body.classList.contains("light")?"🌙 Dark":"☀️ Light";}
+
+// Game variables
+let userScore=0, compScore=0, round=1, userMatches=0, compMatches=0, streak=0;
+const winningScore=3;
+const choicesElems=document.querySelectorAll(".choice");
+
+// Swipe support
+let touchStartX=0;
+let touchStartY=0;
+
+document.addEventListener('touchstart', e => {
+  touchStartX = e.changedTouches[0].screenX;
+  touchStartY = e.changedTouches[0].screenY;
+});
+document.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].screenX - touchStartX;
+  const dy = e.changedTouches[0].screenY - touchStartY;
+  if(Math.abs(dx)>Math.abs(dy)){
+    if(dx>50) play('scissors'); // swipe right
+    else if(dx<-50) play('paper'); // swipe left
+  }else{
+    if(dy>50) play('rock'); // swipe down
+    else if(dy<-50) play('rock'); // swipe up
+  }
+});
+
+// Click/Tap effects
+choicesElems.forEach(c=>{
+  c.addEventListener('click',e=>{
+    createClickParticles(e);
+    play(c.dataset.choice);
+  });
+});
+
+// Particle creation
+function createClickParticles(e){
+  for(let i=0;i<8;i++){
+    const particle=document.createElement('div');
+    particle.classList.add('click-particle');
+    document.body.appendChild(particle);
+    particle.style.left=e.clientX+'px';
+    particle.style.top=e.clientY+'px';
+    const x=Math.random()*40-20;
+    const y=Math.random()*40-20;
+    particle.style.transform=`translate(${x}px,${y}px)`;
+    particle.style.opacity=0;
+    setTimeout(()=>particle.remove(),500);
+  }
+}
+
+// Game logic
+function play(userChoice){
+  if(userScore>=winningScore || compScore>=winningScore) return;
+  const choices=['rock','paper','scissors'];
+  const compChoice=choices[Math.floor(Math.random()*3)];
+  let result="";
+  choicesElems.forEach(c=>c.classList.remove("animateWin","animateLose","animateDraw"));
+
+  if(userChoice===compChoice){
+    result=`🤝 Draw!`;
+    animateChoice(userChoice,"draw");
+    streak=0;
+  } else if(
+    (userChoice==='rock' && compChoice==='scissors') ||
+    (userChoice==='paper' && compChoice==='rock') ||
+    (userChoice==='scissors' && compChoice==='paper')
+  ){
+    userScore++;
+    result=`✅ You Win! ${userChoice} beats ${compChoice}`;
+    animateChoice(userChoice,"win");
+    streak++;
+    if(streak>=2) showStreak();
+  } else {
+    compScore++;
+    result=`❌ You Lose! ${compChoice} beats ${userChoice}`;
+    animateChoice(compChoice,"lose");
+    streak=0;
+  }
+
+  document.getElementById('result').textContent=result;
+  animateScore('score', userScore, compScore);
+  const li=document.createElement('li');
+  li.textContent=`Round ${round}: You chose ${userChoice}, Computer chose ${compChoice} → ${result}`;
+  document.getElementById('historyList').appendChild(li);
+  round++;
+
+  if(userScore===winningScore || compScore===winningScore) declareWinner();
+}
+
+function animateChoice(choice,type){
+  const elem=[...choicesElems].find(c=>c.dataset.choice===choice);
+  if(type==="win") elem.classList.add("animateWin");
+  else if(type==="lose") elem.classList.add("animateLose");
+  else elem.classList.add("animateDraw");
+}
+
+function animateScore(id,user,comp){
+  const el=document.getElementById(id);
+  let currentUser=parseInt(el.dataset.user||0);
+  let currentComp=parseInt(el.dataset.comp||0);
+  const steps=10; let i=0;
+  const interval=setInterval(()=>{
+    if(i>=steps){clearInterval(interval);return;}
+    currentUser+=(user-currentUser)/(steps-i);
+    currentComp+=(comp-currentComp)/(steps-i);
+    el.textContent=`You: ${Math.round(currentUser)} | Computer: ${Math.round(currentComp)}`;
+    el.dataset.user=Math.round(currentUser);
+    el.dataset.comp=Math.round(currentComp);
+    i++;
+  },30);
+}
+
+function showStreak(){
+  const streakText=document.getElementById('streakText');
+  streakText.style.opacity=1;
+  launchConfetti();
+  setTimeout(()=>streakText.style.opacity=0,1500);
+}
+
+function declareWinner(){
+  let title="", message="";
+  if(userScore===winningScore){
+    title="🎉 You Win!";
+    message="Congratulations, you beat the computer 🏆";
+    userMatches++;
+    launchConfetti();
+  } else {
+    title="😢 You Lost!";
+    message="The computer won this match. Better luck next time!";
+    compMatches++;
+  }
+  document.getElementById('choices').classList.add("disabled");
+  document.getElementById('winnerTitle').textContent=title;
+  document.getElementById('winnerMessage').textContent=message;
+  document.getElementById('winnerModal').style.display="flex";
+  document.getElementById('playAgainBtn').style.display="inline-block";
+  updateMatchScoreboard();
+}
+
+function resetGame(){
+  userScore=0; compScore=0; round=1; streak=0;
+  document.getElementById('result').textContent="New match! Start playing 🎮";
+  document.getElementById('score').textContent=`You: 0 | Computer: 0`;
+  document.getElementById('choices').classList.remove("disabled");
+  document.getElementById('historyList').innerHTML="";
+  choicesElems.forEach(c=>c.classList.remove("animateWin","animateLose","animateDraw"));
+  document.getElementById('playAgainBtn').style.display="none";
+}
+
+function updateMatchScoreboard(){
+  document.getElementById('matchScoreboard').textContent=`🏅 Matches — You: ${userMatches} | Computer: ${compMatches}`;
+}
+function closeModal(){document.getElementById('winnerModal').style.display="none";}
+
+// Firework confetti
+function launchConfetti() {
+  const bursts=3;
+  for(let b=0;b<bursts;b++){
+    const total=20+Math.floor(Math.random()*20);
+    const centerX=window.innerWidth/2;
+    const centerY=window.innerHeight/3;
+    for(let i=0;i<total;i++){
+      const confetti=document.createElement('div');
+      confetti.classList.add('confetti-piece');
+      const angle=Math.random()*2*Math.PI;
+      const distance=150+Math.random()*100;
+      const xShift=Math.cos(angle)*distance;
+      const yShift=Math.sin(angle)*distance;
+      confetti.style.left=`${centerX}px`;
+      confetti.style.top=`${centerY}px`;
+      const size=5+Math.random()*5;
+      confetti.style.width=`${size}px`;
+      confetti.style.height=`${size}px`;
+      confetti.style.background=`hsl(${Math.random()*360},100%,50%)`;
+      const duration=1.5+Math.random()*1.5;
+      confetti.style.transition=`transform ${duration}s ease-out, opacity ${duration}s ease-out`;
+      document.body.appendChild(confetti);
+      setTimeout(()=>{confetti.style.transform=`translate(${xShift}px,${yShift}px) rotate(${Math.random()*720}deg)`; confetti.style.opacity=0;},50);
+      setTimeout(()=>confetti.remove(),(duration+0.1)*1000);
+    }
+  }
+}
+</script>
 </body>
 </html>
